@@ -23,8 +23,8 @@ function showReplay(replayData) {
     replayContainer.innerHTML = "";
   };
   playerContainer.appendChild(closeButton);
-  const duration = (replayData.length + 1) * 60;
-  const score = replayData.filter((d) => d.placed).length;
+  const duration = replayData.length * 30;
+  const score = replayData.length - 1;
   root = createRoot(playerContainer);
   root.render(
     /* @__PURE__ */ jsxDEV(

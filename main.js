@@ -219,21 +219,14 @@ function placeBlock() {
     const newX = direction === 'x' ? (activeBlock.position.x + prevBlock.mesh.position.x) / 2 : prevBlock.mesh.position.x;
     const newZ = direction === 'z' ? (activeBlock.position.z + prevBlock.mesh.position.z) / 2 : prevBlock.mesh.position.z;
 
+    const activeColor = activeBlock.material.color.clone();
     scene.remove(activeBlock);
     addBlock(newX, newZ, newWidth, newDepth, 'stacked');
 
     const lastPlacedBlock = stack[stack.length - 1].mesh;
-    const stepData = {
-        placed: {
-            x: lastPlacedBlock.position.x,
-            y: lastPlacedBlock.position.y,
-            z: lastPlacedBlock.position.z,
-            width: newWidth,
-            depth: newDepth,
-            color: lastPlacedBlock.material.color.getHexString(),
-        },
-        overhang: null
-    };
+    
+    // Capture frame data for replay
+    captureReplayFrame();
 
     // Overhang piece with physics - FIXED: ensure shape matches mesh dimensions exactly
     const overhangWidth = direction === 'x' ? Math.abs(prevBlock.width - overlap) : prevBlock.width;
@@ -244,7 +237,7 @@ function placeBlock() {
         const overhangZ = direction === 'z' ? newZ + (overlap / 2 * overhang) + (overhangDepth / 2 * overhang) : newZ;
         
         const overhangGeometry = new THREE.BoxGeometry(overhangWidth, BLOCK_HEIGHT, overhangDepth);
-        const overhangMaterial = activeBlock.material;
+        const overhangMaterial = new THREE.MeshLambertMaterial({ color: activeColor });
         const overhangMesh = new THREE.Mesh(overhangGeometry, overhangMaterial);
         overhangMesh.position.set(overhangX, activeBlock.position.y, overhangZ);
         scene.add(overhangMesh);
@@ -286,18 +279,8 @@ function placeBlock() {
             stuckCounter: 0,
             originalColor: overhangMaterial.color.clone()
         });
-
-        stepData.overhang = {
-            x: overhangX,
-            y: activeBlock.position.y,
-            z: overhangZ,
-            width: overhangWidth,
-            depth: overhangDepth,
-            color: overhangMaterial.color.getHexString(),
-        };
     }
     
-    replayData.push(stepData);
     activeBlock = null;
 
     scoreElement.innerText = stack.length - 1;
@@ -307,6 +290,34 @@ function placeBlock() {
     camera.position.y = cameraY;
 
     spawnNewBlock();
+}
+
+function captureReplayFrame() {
+    const frame = {
+        cameraPosition: camera.position.clone(),
+        cameraTarget: new THREE.Vector3(0, stack.length * BLOCK_HEIGHT * 0.5, 0),
+        stack: stack.map(block => ({
+            position: block.mesh.position.clone(),
+            scale: new THREE.Vector3(
+                block.mesh.geometry.parameters.width,
+                block.mesh.geometry.parameters.height,
+                block.mesh.geometry.parameters.depth
+            ),
+            color: block.mesh.material.color.getHex(),
+            quaternion: block.mesh.quaternion.clone()
+        })),
+        overhangs: overhangs.filter(o => !o.life).map(overhang => ({
+            position: overhang.mesh.position.clone(),
+            scale: new THREE.Vector3(
+                overhang.mesh.geometry.parameters.width,
+                overhang.mesh.geometry.parameters.height,
+                overhang.mesh.geometry.parameters.depth
+            ),
+            color: (overhang.originalColor || overhang.mesh.material.color).getHex(),
+            quaternion: overhang.mesh.quaternion.clone()
+        }))
+    };
+    replayData.push(frame);
 }
 
 function gameOver() {

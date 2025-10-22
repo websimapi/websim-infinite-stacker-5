@@ -1,204 +1,183 @@
 import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
-import React, { useMemo, useRef, useEffect } from "react";
-import {
-  AbsoluteFill,
-  useCurrentFrame,
-  useVideoConfig,
-  interpolate
-} from "remotion";
-import { ThreeCanvas, useThree } from "@remotion/three";
+import React, { useRef, useMemo } from "react";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+import { ThreeCanvas } from "@remotion/three";
 import * as THREE from "three";
-import * as CANNON from "cannon-es";
-const BLOCK_HEIGHT = 0.25;
-const ThreeScene = ({ replayData }) => {
-  const frame = useCurrentFrame();
-  const { camera } = useThree();
-  const worldRef = useRef(null);
-  const blocksRef = useRef([]);
-  const { stack, overhangs, lastFrame } = useMemo(() => {
-    const world = new CANNON.World();
-    world.gravity.set(0, -9.82, 0);
-    const baseBody = new CANNON.Body({
-      mass: 0,
-      shape: new CANNON.Box(new CANNON.Vec3(0.5, BLOCK_HEIGHT / 2, 0.5)),
-      position: new CANNON.Vec3(0, -BLOCK_HEIGHT, 0)
-    });
-    world.addBody(baseBody);
-    const localStack = [];
-    const localOverhangs = [];
-    replayData.forEach((step, i) => {
-      if (step.placed) {
-        const { x, y, z, width, depth, color } = step.placed;
-        const body = new CANNON.Body({
-          mass: 0,
-          shape: new CANNON.Box(new CANNON.Vec3(width / 2, BLOCK_HEIGHT / 2, depth / 2)),
-          position: new CANNON.Vec3(x, y, z)
-        });
-        world.addBody(body);
-        localStack.push({ data: { ...step.placed }, body });
-      }
-      if (step.overhang) {
-        const { x, y, z, width, depth, color } = step.overhang;
-        const body = new CANNON.Body({
-          mass: 1,
-          shape: new CANNON.Box(new CANNON.Vec3(width / 2, BLOCK_HEIGHT / 2, depth / 2)),
-          position: new CANNON.Vec3(x, y, z)
-        });
-        world.addBody(body);
-        localOverhangs.push({ data: { ...step.overhang }, body, startFrame: (i + 1) * 60 });
-      }
-    });
-    worldRef.current = world;
-    return { stack: localStack, overhangs: localOverhangs, lastFrame: replayData.length * 60 };
-  }, [replayData]);
-  useEffect(() => {
-    const physicsFrame = Math.min(frame, lastFrame);
-    stack.forEach((b) => b.body.position.copy(b.data));
-    overhangs.forEach((o) => {
-      o.body.position.set(o.data.x, o.data.y, o.data.z);
-      o.body.velocity.set(0, 0, 0);
-      o.body.angularVelocity.set(0, 0, 0);
-      o.body.quaternion.set(0, 0, 0, 1);
-    });
-    for (let i = 0; i < physicsFrame; i++) {
-      overhangs.forEach((o) => {
-        if (i === o.startFrame) {
-          o.body.velocity.set((Math.random() - 0.5) * 2, -1, (Math.random() - 0.5) * 2);
-          o.body.angularVelocity.set((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
-        }
-      });
-      worldRef.current.step(1 / 30);
+const ReplayScene = ({ frame, replayData }) => {
+  const frameIndex = Math.min(Math.floor(frame / 30), replayData.length - 1);
+  const frameData = replayData[frameIndex] || replayData[0];
+  if (!frameData) return null;
+  const progress = frame % 30 / 30;
+  const nextFrameIndex = Math.min(frameIndex + 1, replayData.length - 1);
+  const nextFrameData = replayData[nextFrameIndex];
+  const cameraPosition = useMemo(() => {
+    if (nextFrameData && frameIndex !== nextFrameIndex) {
+      return new THREE.Vector3().lerpVectors(
+        frameData.cameraPosition,
+        nextFrameData.cameraPosition,
+        progress
+      );
     }
-    if (blocksRef.current.length > 0) {
-      overhangs.forEach((o, i) => {
-        const mesh = blocksRef.current[i];
-        if (frame >= o.startFrame) {
-          mesh.position.copy(o.body.position);
-          mesh.quaternion.copy(o.body.quaternion);
-          mesh.visible = true;
-        } else {
-          mesh.visible = false;
-        }
-      });
+    return frameData.cameraPosition;
+  }, [frameData, nextFrameData, progress, frameIndex, nextFrameIndex]);
+  const cameraTarget = useMemo(() => {
+    if (nextFrameData && frameIndex !== nextFrameIndex) {
+      return new THREE.Vector3().lerpVectors(
+        frameData.cameraTarget,
+        nextFrameData.cameraTarget,
+        progress
+      );
     }
-  }, [frame, stack, overhangs, lastFrame]);
-  useEffect(() => {
-    const aspect = 540 / 960;
-    const frustumSize = 4;
-    camera.left = frustumSize * aspect / -2;
-    camera.right = frustumSize * aspect / 2;
-    camera.top = frustumSize / 2;
-    camera.bottom = frustumSize / -2;
-    camera.near = 1;
-    camera.far = 100;
-    camera.position.set(4, 4, 4);
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-  }, [camera]);
-  const cameraY = interpolate(frame, [0, replayData.length * 60], [4, 4 + replayData.length * BLOCK_HEIGHT]);
-  camera.position.y = cameraY;
-  const lookAtY = interpolate(frame, [0, replayData.length * 60], [0, replayData.length * BLOCK_HEIGHT * 0.5]);
-  camera.lookAt(0, lookAtY, 0);
+    return frameData.cameraTarget;
+  }, [frameData, nextFrameData, progress, frameIndex, nextFrameIndex]);
   return /* @__PURE__ */ jsxDEV(Fragment, { children: [
     /* @__PURE__ */ jsxDEV("ambientLight", { intensity: 0.6 }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 123,
+      lineNumber: 41,
       columnNumber: 7
     }),
     /* @__PURE__ */ jsxDEV("directionalLight", { position: [10, 20, 0], intensity: 0.6 }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 124,
+      lineNumber: 42,
       columnNumber: 7
     }),
-    /* @__PURE__ */ jsxDEV("mesh", { "position-y": -BLOCK_HEIGHT, children: [
-      /* @__PURE__ */ jsxDEV("boxGeometry", { args: [1, BLOCK_HEIGHT, 1] }, void 0, false, {
+    frameData.stack.map((block, i) => /* @__PURE__ */ jsxDEV("mesh", { position: block.position, quaternion: block.quaternion, children: [
+      /* @__PURE__ */ jsxDEV("boxGeometry", { args: [block.scale.x, block.scale.y, block.scale.z] }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 128,
-        columnNumber: 9
+        lineNumber: 46,
+        columnNumber: 11
       }),
-      /* @__PURE__ */ jsxDEV("meshLambertMaterial", { color: "#aaaaaa" }, void 0, false, {
+      /* @__PURE__ */ jsxDEV("meshLambertMaterial", { color: block.color }, void 0, false, {
         fileName: "<stdin>",
-        lineNumber: 129,
-        columnNumber: 9
+        lineNumber: 47,
+        columnNumber: 11
       })
-    ] }, void 0, true, {
+    ] }, `stack-${i}`, true, {
       fileName: "<stdin>",
-      lineNumber: 127,
-      columnNumber: 7
-    }),
-    replayData.map((step, i) => {
-      if (!step.placed) return null;
-      const isVisible = frame >= (i + 1) * 60;
-      return /* @__PURE__ */ jsxDEV("mesh", { visible: isVisible, position: [step.placed.x, step.placed.y, step.placed.z], children: [
-        /* @__PURE__ */ jsxDEV("boxGeometry", { args: [step.placed.width, BLOCK_HEIGHT, step.placed.depth] }, void 0, false, {
+      lineNumber: 45,
+      columnNumber: 9
+    })),
+    frameData.overhangs.map((overhang, i) => {
+      let position = overhang.position;
+      let quaternion = overhang.quaternion;
+      if (nextFrameData && nextFrameData.overhangs[i] && frameIndex !== nextFrameIndex) {
+        position = new THREE.Vector3().lerpVectors(
+          overhang.position,
+          nextFrameData.overhangs[i].position,
+          progress
+        );
+        quaternion = new THREE.Quaternion().slerpQuaternions(
+          overhang.quaternion,
+          nextFrameData.overhangs[i].quaternion,
+          progress
+        );
+      }
+      return /* @__PURE__ */ jsxDEV("mesh", { position, quaternion, children: [
+        /* @__PURE__ */ jsxDEV("boxGeometry", { args: [overhang.scale.x, overhang.scale.y, overhang.scale.z] }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 138,
+          lineNumber: 70,
           columnNumber: 13
         }),
-        /* @__PURE__ */ jsxDEV("meshLambertMaterial", { color: `#${step.placed.color}` }, void 0, false, {
+        /* @__PURE__ */ jsxDEV("meshLambertMaterial", { color: overhang.color }, void 0, false, {
           fileName: "<stdin>",
-          lineNumber: 139,
+          lineNumber: 71,
           columnNumber: 13
         })
-      ] }, `p-${i}`, true, {
+      ] }, `overhang-${i}`, true, {
         fileName: "<stdin>",
-        lineNumber: 137,
+        lineNumber: 69,
         columnNumber: 11
       });
     }),
-    overhangs.map((o, i) => /* @__PURE__ */ jsxDEV("mesh", { ref: (el) => blocksRef.current[i] = el, children: [
-      /* @__PURE__ */ jsxDEV("boxGeometry", { args: [o.data.width, BLOCK_HEIGHT, o.data.depth] }, void 0, false, {
+    /* @__PURE__ */ jsxDEV(
+      "perspectiveCamera",
+      {
+        makeDefault: true,
+        position: [cameraPosition.x, cameraPosition.y, cameraPosition.z],
+        lookAt: cameraTarget
+      },
+      void 0,
+      false,
+      {
         fileName: "<stdin>",
-        lineNumber: 147,
-        columnNumber: 13
-      }),
-      /* @__PURE__ */ jsxDEV("meshLambertMaterial", { color: `#${o.data.color}` }, void 0, false, {
-        fileName: "<stdin>",
-        lineNumber: 148,
-        columnNumber: 13
-      })
-    ] }, `o-${i}`, true, {
-      fileName: "<stdin>",
-      lineNumber: 146,
-      columnNumber: 10
-    }))
+        lineNumber: 76,
+        columnNumber: 7
+      }
+    )
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 122,
+    lineNumber: 40,
     columnNumber: 5
   });
 };
 const ReplayComposition = ({ replayData, finalScore }) => {
-  const { fps } = useVideoConfig();
-  return /* @__PURE__ */ jsxDEV(AbsoluteFill, { style: { backgroundColor: "#d0e7f9" }, children: [
-    /* @__PURE__ */ jsxDEV(ThreeCanvas, { width: 540, height: 960, orthographic: true, children: /* @__PURE__ */ jsxDEV(ThreeScene, { replayData }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 162,
-      columnNumber: 9
-    }) }, void 0, false, {
-      fileName: "<stdin>",
-      lineNumber: 161,
-      columnNumber: 7
-    }),
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  return /* @__PURE__ */ jsxDEV(AbsoluteFill, { style: { background: "#d0e7f9" }, children: [
+    /* @__PURE__ */ jsxDEV(
+      ThreeCanvas,
+      {
+        orthographic: false,
+        width: 540,
+        height: 960,
+        style: { width: "100%", height: "100%" },
+        children: /* @__PURE__ */ jsxDEV(ReplayScene, { frame, replayData }, void 0, false, {
+          fileName: "<stdin>",
+          lineNumber: 97,
+          columnNumber: 9
+        })
+      },
+      void 0,
+      false,
+      {
+        fileName: "<stdin>",
+        lineNumber: 91,
+        columnNumber: 7
+      }
+    ),
     /* @__PURE__ */ jsxDEV(AbsoluteFill, { style: {
       justifyContent: "flex-start",
       alignItems: "center",
-      paddingTop: "10%"
-    }, children: /* @__PURE__ */ jsxDEV("h1", { style: { color: "white", fontSize: "72px", textShadow: "3px 3px 6px rgba(0,0,0,0.5)" }, children: [
+      paddingTop: "5%",
+      pointerEvents: "none"
+    }, children: /* @__PURE__ */ jsxDEV("h1", { style: {
+      color: "white",
+      fontSize: "72px",
+      textShadow: "4px 4px 8px rgba(0,0,0,0.8)",
+      margin: 0
+    }, children: [
       "Score: ",
       finalScore
     ] }, void 0, true, {
       fileName: "<stdin>",
-      lineNumber: 170,
+      lineNumber: 106,
       columnNumber: 9
     }) }, void 0, false, {
       fileName: "<stdin>",
-      lineNumber: 165,
+      lineNumber: 100,
+      columnNumber: 7
+    }),
+    /* @__PURE__ */ jsxDEV(AbsoluteFill, { style: {
+      justifyContent: "flex-end",
+      alignItems: "center",
+      paddingBottom: "5%",
+      pointerEvents: "none"
+    }, children: /* @__PURE__ */ jsxDEV("div", { style: {
+      color: "white",
+      fontSize: "36px",
+      textShadow: "2px 2px 4px rgba(0,0,0,0.8)"
+    }, children: "Instant Replay" }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 122,
+      columnNumber: 9
+    }) }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 116,
       columnNumber: 7
     })
   ] }, void 0, true, {
     fileName: "<stdin>",
-    lineNumber: 160,
+    lineNumber: 90,
     columnNumber: 5
   });
 };
