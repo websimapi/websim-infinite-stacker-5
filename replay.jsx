@@ -27,7 +27,7 @@ function showReplay(replayData) {
   const score = replayData.length - 1;
   root = createRoot(playerContainer);
   root.render(
-    /* @__PURE__ */ jsxDEV(
+    /* @__PURE__ */ jsxDEV(React.StrictMode, { children: /* @__PURE__ */ jsxDEV(
       Player,
       {
         component: ReplayComposition,
@@ -45,11 +45,15 @@ function showReplay(replayData) {
       false,
       {
         fileName: "<stdin>",
-        lineNumber: 35,
-        columnNumber: 5
+        lineNumber: 36,
+        columnNumber: 7
       },
       this
-    )
+    ) }, void 0, false, {
+      fileName: "<stdin>",
+      lineNumber: 35,
+      columnNumber: 5
+    }, this)
   );
 }
 export {
